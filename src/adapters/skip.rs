@@ -5,7 +5,7 @@ pub struct SkipPattern<P>(P, usize);
 
 impl<P> SkipPattern<P> {
     #[must_use]
-    pub const fn new(pattern: P, n: usize) -> Self {
+    pub(super) const fn new(pattern: P, n: usize) -> Self {
         Self(pattern, n)
     }
 }
@@ -26,7 +26,7 @@ pub struct SkipSearcher<S> {
 
 impl<S> SkipSearcher<S> {
     #[must_use]
-    const fn new(searcher: S, n: usize) -> Self {
+    pub(super) const fn new(searcher: S, n: usize) -> Self {
         Self { searcher, n }
     }
 }

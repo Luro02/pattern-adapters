@@ -6,7 +6,7 @@ pub struct NotPattern<A>(A);
 impl<A> NotPattern<A> {
     /// Constructs a new `NotPattern` with the provided [`Pattern`].
     #[must_use]
-    pub const fn new(a: A) -> Self {
+    pub(super) const fn new(a: A) -> Self {
         Self(a)
     }
 }

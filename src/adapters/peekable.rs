@@ -6,7 +6,7 @@ pub struct PeekablePattern<P>(P);
 
 impl<P> PeekablePattern<P> {
     #[must_use]
-    pub const fn new(pattern: P) -> Self {
+    pub(super) const fn new(pattern: P) -> Self {
         Self(pattern)
     }
 }
@@ -27,7 +27,7 @@ pub struct PeekableSearcher<S> {
 
 impl<S> PeekableSearcher<S> {
     #[must_use]
-    const fn new(searcher: S) -> Self {
+    pub(super) const fn new(searcher: S) -> Self {
         Self {
             searcher,
             peeked: None,

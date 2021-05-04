@@ -1,13 +1,13 @@
 use core::str::pattern::{Pattern, SearchStep, Searcher};
 
-use super::{FusedSearcher, IndexedSearcher, PatternExt};
+use super::{FusedSearcher, IndexedSearcher, SearcherExt};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct LimitedPattern<P>(P, usize);
 
 impl<P> LimitedPattern<P> {
     #[must_use]
-    pub const fn new(pattern: P, remaining: usize) -> Self {
+    pub(super) const fn new(pattern: P, remaining: usize) -> Self {
         Self(pattern, remaining)
     }
 }
@@ -16,7 +16,7 @@ impl<'a, P: Pattern<'a>> Pattern<'a> for LimitedPattern<P> {
     type Searcher = LimitedSearcher<P::Searcher>;
 
     fn into_searcher(self, haystack: &'a str) -> Self::Searcher {
-        LimitedSearcher::new(self.0.indexed().fused().into_searcher(haystack), self.1)
+        LimitedSearcher::new(self.0.into_searcher(haystack), self.1)
     }
 }
 
@@ -26,15 +26,17 @@ pub struct LimitedSearcher<S> {
     remaining: usize,
 }
 
-impl<S> LimitedSearcher<S> {
+impl<'a, S: Searcher<'a>> LimitedSearcher<S> {
     #[must_use]
-    const fn new(searcher: FusedSearcher<IndexedSearcher<S>>, remaining: usize) -> Self {
+    pub(super) fn new(searcher: S, remaining: usize) -> Self {
         Self {
-            searcher,
+            searcher: searcher.indexed().fused(),
             remaining,
         }
     }
+}
 
+impl<S> LimitedSearcher<S> {
     #[must_use]
     pub fn index(&self) -> usize {
         self.searcher.index()

@@ -1,7 +1,7 @@
-use super::{NotPattern, OrPattern};
+use super::{LOrPattern, NotPattern};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct NorPattern<A, B>(NotPattern<OrPattern<A, B>>);
+pub struct NorPattern<A, B>(NotPattern<LOrPattern<A, B>>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AndPattern<A, B>(NorPattern<NotPattern<A>, NotPattern<B>>);
@@ -11,7 +11,7 @@ macro_rules! generate_pattern {
         $(
             impl<A, B> $name<A, B> {
                 #[must_use]
-                pub fn new(a: A, b: B) -> Self { Self($f(a, b)) }
+                pub(super) fn new(a: A, b: B) -> Self { Self($f(a, b)) }
             }
 
             impl<'a, A, B> ::core::str::pattern::Pattern<'a> for $name<A, B>
@@ -35,7 +35,7 @@ generate_pattern!(
         inner_type => NorPattern<NotPattern<A>, NotPattern<B>>
     },
     NorPattern {
-        constructor => |a, b| NotPattern::new(OrPattern::new(a, b)),
-        inner_type => NotPattern<OrPattern<A, B>>
+        constructor => |a, b| NotPattern::new(LOrPattern::new(a, b)),
+        inner_type => NotPattern<LOrPattern<A, B>>
     }
 );

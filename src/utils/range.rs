@@ -206,4 +206,28 @@ mod tests {
         assert_eq!(Range::from(3..5).intersect((1..3).into()), None);
         assert_eq!(Range::from(1..5).intersect((0..1).into()), None);
     }
+
+    #[test]
+    fn test_range_intersection_commutative() {
+        assert_eq!(
+            Range::from(2..3).intersect((1..5).into()),
+            Some(Range::from(2..3))
+        );
+
+        assert_eq!(Range::from(5..5).intersect((1..5).into()), None);
+        // self:   1 2 3 4 5
+        // other:      3 4 5 6 7 8
+        // result:     3 4 5
+        assert_eq!(
+            Range::from(3..9).intersect((1..6).into()),
+            Some(Range::from(3..6))
+        );
+        // self   : 1 2 3 4 .
+        // other  :         5 6 7
+        assert_eq!(Range::from(5..7).intersect((1..5).into()), None);
+        // self   :     3 4
+        // other  : 1 2
+        assert_eq!(Range::from(1..3).intersect((3..5).into()), None);
+        assert_eq!(Range::from(0..1).intersect((1..5).into()), None);
+    }
 }

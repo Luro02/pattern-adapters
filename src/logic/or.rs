@@ -3,17 +3,50 @@ use core::str::pattern::{Pattern, SearchStep, Searcher};
 use crate::utils::Range;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OrPattern<A, B>(A, B);
+pub struct LOrPattern<A, B>(OrPattern<A, B, fn(Range, Range) -> ToMatch>);
 
-impl<A, B> OrPattern<A, B> {
+impl<A, B> LOrPattern<A, B> {
     #[must_use]
-    pub const fn new(a: A, b: B) -> Self {
-        Self(a, b)
+    pub(super) fn new(a: A, b: B) -> Self {
+        Self(OrPattern::new(a, b, |_, _| ToMatch::Left))
     }
 }
 
-impl<'a, A: Pattern<'a>, B: Pattern<'a>> Pattern<'a> for OrPattern<A, B> {
-    type Searcher = OrSearcher<A::Searcher, B::Searcher>;
+impl<'a, A, B> Pattern<'a> for LOrPattern<A, B>
+where
+    A: Pattern<'a>,
+    B: Pattern<'a>,
+{
+    type Searcher = <OrPattern<A, B, fn(Range, Range) -> ToMatch> as Pattern<'a>>::Searcher;
+
+    fn into_searcher(self, haystack: &'a str) -> Self::Searcher {
+        self.0.into_searcher(haystack)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OrPattern<A, B, F>(A, B, F);
+
+impl<A, B, F> OrPattern<A, B, F> {
+    #[must_use]
+    pub(super) const fn new(a: A, b: B, f: F) -> Self {
+        Self(a, b, f)
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ToMatch {
+    Left,
+    Right,
+}
+
+impl<'a, A, B, F> Pattern<'a> for OrPattern<A, B, F>
+where
+    A: Pattern<'a>,
+    B: Pattern<'a>,
+    F: Fn(Range, Range) -> ToMatch,
+{
+    type Searcher = OrSearcher<A::Searcher, B::Searcher, F>;
 
     fn into_searcher(self, haystack: &'a str) -> Self::Searcher {
         OrSearcher {
@@ -22,6 +55,7 @@ impl<'a, A: Pattern<'a>, B: Pattern<'a>> Pattern<'a> for OrPattern<A, B> {
             index: 0,
             next_match: None,
             cached_match: None,
+            f: self.2,
         }
     }
 }
@@ -33,15 +67,21 @@ enum CachedMatch {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct OrSearcher<A, B> {
+pub struct OrSearcher<A, B, F> {
     a: A,
     b: B,
     index: usize,
     next_match: Option<(usize, usize)>,
     cached_match: Option<CachedMatch>,
+    f: F,
 }
 
-impl<'a, A: Searcher<'a>, B: Searcher<'a>> OrSearcher<A, B> {
+impl<'a, A, B, F> OrSearcher<A, B, F>
+where
+    A: Searcher<'a>,
+    B: Searcher<'a>,
+    F: Fn(Range, Range) -> ToMatch,
+{
     pub fn index(&self) -> usize {
         self.index
     }
@@ -73,7 +113,12 @@ impl<'a, A: Searcher<'a>, B: Searcher<'a>> OrSearcher<A, B> {
     }
 }
 
-unsafe impl<'a, A: Searcher<'a>, B: Searcher<'a>> Searcher<'a> for OrSearcher<A, B> {
+unsafe impl<'a, A, B, F> Searcher<'a> for OrSearcher<A, B, F>
+where
+    A: Searcher<'a>,
+    B: Searcher<'a>,
+    F: Fn(Range, Range) -> ToMatch,
+{
     fn haystack(&self) -> &'a str {
         // SAFETY: if this is not the case, we would have undefined behavior
         debug_assert_eq!(self.a.haystack(), self.b.haystack());
@@ -95,7 +140,10 @@ unsafe impl<'a, A: Searcher<'a>, B: Searcher<'a>> Searcher<'a> for OrSearcher<A,
 
                     // NOTE: a == b is implied by a.intersect(b).is_some()
                     if a.intersect(b).is_some() || a == b {
-                        a
+                        match (self.f)(a, b) {
+                            ToMatch::Left => a,
+                            ToMatch::Right => b,
+                        }
                     } else if a.start() < b.start() {
                         self.cached_match = Some(CachedMatch::B(b.start(), b.end()));
                         a
@@ -133,7 +181,7 @@ mod tests {
     #[test]
     fn test_searcher_same_size() {
         let haystack = "a b c a b b a a b";
-        let mut searcher = OrPattern::new('a', 'b').into_searcher(haystack);
+        let mut searcher = LOrPattern::new('a', 'b').into_searcher(haystack);
 
         assert_eq!(searcher.next(), SearchStep::Match(0, 1));
         assert_eq!(searcher.next(), SearchStep::Reject(1, 2));
@@ -158,7 +206,7 @@ mod tests {
     #[test]
     fn test_searcher_left_smaller() {
         let haystack = "abcaabbaab";
-        let mut searcher = OrPattern::new("a", "ab").into_searcher(haystack);
+        let mut searcher = LOrPattern::new("a", "ab").into_searcher(haystack);
 
         assert_eq!(searcher.next(), SearchStep::Match(0, 1));
         assert_eq!(searcher.next(), SearchStep::Reject(1, 3));
@@ -176,7 +224,7 @@ mod tests {
     #[test]
     fn test_searcher_right_smaller() {
         let haystack = "abcaabbaab";
-        let mut searcher = OrPattern::new("ab", "a").into_searcher(haystack);
+        let mut searcher = LOrPattern::new("ab", "a").into_searcher(haystack);
 
         assert_eq!(searcher.next(), SearchStep::Match(0, 2));
         assert_eq!(searcher.next(), SearchStep::Reject(2, 3));
@@ -193,7 +241,7 @@ mod tests {
     #[test]
     fn test_searcher_unicode_right_larger() {
         let haystack = "\nMäry häd ä little lämb\n\r\nLittle lämb\n";
-        let mut searcher = OrPattern::new("\r\n", "\n").into_searcher(haystack);
+        let mut searcher = LOrPattern::new("\r\n", "\n").into_searcher(haystack);
 
         assert_eq!(searcher.next(), SearchStep::Match(0, 1));
         assert_eq!(searcher.next(), SearchStep::Reject(1, 27));
@@ -209,7 +257,7 @@ mod tests {
     #[test]
     fn test_searcher_empty_string() {
         let haystack = "";
-        let mut searcher = OrPattern::new("abc", "ab").into_searcher(haystack);
+        let mut searcher = LOrPattern::new("abc", "ab").into_searcher(haystack);
 
         assert_eq!(searcher.next(), SearchStep::Done);
         assert_eq!(searcher.next(), SearchStep::Done);

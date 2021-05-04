@@ -1,7 +1,6 @@
 use core::str::pattern::{Pattern, SearchStep, Searcher};
 
 use crate::utils::Range;
-// TODO: better name?
 
 // This pattern will reject as much as possible, instead of returning multiple
 // small rejects
@@ -10,7 +9,7 @@ pub struct SimplifyingPattern<P>(P);
 
 impl<P> SimplifyingPattern<P> {
     #[must_use]
-    pub const fn new(pattern: P) -> Self {
+    pub(super) const fn new(pattern: P) -> Self {
         Self(pattern)
     }
 }
@@ -23,8 +22,6 @@ impl<'a, P: Pattern<'a>> Pattern<'a> for SimplifyingPattern<P> {
     }
 }
 
-// TODO: simplify with IndexedSearcher
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimplifyingSearcher<S> {
     searcher: S,
@@ -34,7 +31,7 @@ pub struct SimplifyingSearcher<S> {
 
 impl<S> SimplifyingSearcher<S> {
     #[must_use]
-    const fn new(searcher: S) -> Self {
+    pub(super) const fn new(searcher: S) -> Self {
         Self {
             searcher,
             index: 0,

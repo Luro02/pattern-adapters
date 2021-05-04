@@ -6,7 +6,7 @@ pub struct FusedPattern<P>(P);
 
 impl<P> FusedPattern<P> {
     #[must_use]
-    pub const fn new(pattern: P) -> Self {
+    pub(super) const fn new(pattern: P) -> Self {
         Self(pattern)
     }
 }
@@ -27,7 +27,7 @@ pub struct FusedSearcher<S> {
 
 impl<S> FusedSearcher<S> {
     #[must_use]
-    const fn new(searcher: S) -> Self {
+    pub(super) const fn new(searcher: S) -> Self {
         Self {
             searcher,
             exhausted: false,
@@ -36,6 +36,13 @@ impl<S> FusedSearcher<S> {
 }
 
 impl<'a, S: Searcher<'a>> FusedSearcher<S> {
+    /// Exhausts the Searcher by calling `Searcher::next` repeatedly, until `SearchStep::Done` is returned.
+    ///
+    /// ### Note
+    ///
+    /// This could possibly cause an endless loop if the underlying searcher is not implemented correctly.
+    /// It should not happen, because `Searcher::haystack` is a finite string and the `SearchStep`s returned by
+    /// `Searcher::next` must be non-overlapping.
     pub fn exhaust(&mut self) {
         while self.next() != SearchStep::Done {}
     }
