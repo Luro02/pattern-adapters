@@ -1,3 +1,4 @@
+use core::ops::Deref;
 use core::str::pattern::{Pattern, SearchStep, Searcher};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -5,7 +6,9 @@ pub struct PeekablePattern<P>(P);
 
 impl<P> PeekablePattern<P> {
     #[must_use]
-    pub const fn new(pattern: P) -> Self { Self(pattern) }
+    pub const fn new(pattern: P) -> Self {
+        Self(pattern)
+    }
 }
 
 impl<'a, P: Pattern<'a>> Pattern<'a> for PeekablePattern<P> {
@@ -42,13 +45,23 @@ impl<'a, S: Searcher<'a>> PeekableSearcher<S> {
 }
 
 unsafe impl<'a, S: Searcher<'a>> Searcher<'a> for PeekableSearcher<S> {
-    fn haystack(&self) -> &'a str { self.searcher.haystack() }
+    fn haystack(&self) -> &'a str {
+        self.searcher.haystack()
+    }
 
     fn next(&mut self) -> SearchStep {
         match self.peeked.take() {
             Some(value) => value,
             None => self.searcher.next(),
         }
+    }
+}
+
+impl<'a, S: Searcher<'a>> Deref for PeekableSearcher<S> {
+    type Target = S;
+
+    fn deref(&self) -> &Self::Target {
+        &self.searcher
     }
 }
 

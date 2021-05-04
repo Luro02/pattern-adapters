@@ -33,7 +33,9 @@ impl Range {
     /// assert_eq!(range.start(), 6);
     /// ```
     #[must_use]
-    pub const fn start(self) -> usize { self.start }
+    pub const fn start(self) -> usize {
+        self.start
+    }
 
     /// Returns the end of the `Range` (exclusive bound).
     ///
@@ -60,7 +62,9 @@ impl Range {
     /// assert_eq!(range.end(), 3);
     /// ```
     #[must_use]
-    pub const fn end(self) -> usize { self.end }
+    pub const fn end(self) -> usize {
+        self.end
+    }
 
     /// Returns the intersection between this range and the other range.
     ///
@@ -137,7 +141,9 @@ impl Range {
     }
 
     #[must_use]
-    pub fn is_empty(self) -> bool { self.len() == 0 }
+    pub fn is_empty(self) -> bool {
+        self.len() == 0
+    }
 }
 
 impl From<ops::Range<usize>> for Range {
@@ -162,11 +168,15 @@ impl From<ops::RangeInclusive<usize>> for Range {
 //       types)
 #[allow(clippy::from_over_into)]
 impl Into<(usize, usize)> for Range {
-    fn into(self) -> (usize, usize) { (self.start, self.end) }
+    fn into(self) -> (usize, usize) {
+        (self.start, self.end)
+    }
 }
 
 impl From<(usize, usize)> for Range {
-    fn from(value: (usize, usize)) -> Self { (value.0..value.1).into() }
+    fn from(value: (usize, usize)) -> Self {
+        (value.0..value.1).into()
+    }
 }
 
 #[cfg(test)]

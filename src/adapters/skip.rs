@@ -5,7 +5,9 @@ pub struct SkipPattern<P>(P, usize);
 
 impl<P> SkipPattern<P> {
     #[must_use]
-    pub const fn new(pattern: P, n: usize) -> Self { Self(pattern, n) }
+    pub const fn new(pattern: P, n: usize) -> Self {
+        Self(pattern, n)
+    }
 }
 
 impl<'a, P: Pattern<'a>> Pattern<'a> for SkipPattern<P> {
@@ -24,11 +26,15 @@ pub struct SkipSearcher<S> {
 
 impl<S> SkipSearcher<S> {
     #[must_use]
-    const fn new(searcher: S, n: usize) -> Self { Self { searcher, n } }
+    const fn new(searcher: S, n: usize) -> Self {
+        Self { searcher, n }
+    }
 }
 
 unsafe impl<'a, S: Searcher<'a>> Searcher<'a> for SkipSearcher<S> {
-    fn haystack(&self) -> &'a str { self.searcher.haystack() }
+    fn haystack(&self) -> &'a str {
+        self.searcher.haystack()
+    }
 
     fn next(&mut self) -> SearchStep {
         let step = self.searcher.next();

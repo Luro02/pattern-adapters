@@ -10,7 +10,9 @@ pub struct SimplifyingPattern<P>(P);
 
 impl<P> SimplifyingPattern<P> {
     #[must_use]
-    pub const fn new(pattern: P) -> Self { Self(pattern) }
+    pub const fn new(pattern: P) -> Self {
+        Self(pattern)
+    }
 }
 
 impl<'a, P: Pattern<'a>> Pattern<'a> for SimplifyingPattern<P> {
@@ -62,7 +64,9 @@ impl<'a, S: Searcher<'a>> SimplifyingSearcher<S> {
 }
 
 unsafe impl<'a, S: Searcher<'a>> Searcher<'a> for SimplifyingSearcher<S> {
-    fn haystack(&self) -> &'a str { self.searcher.haystack() }
+    fn haystack(&self) -> &'a str {
+        self.searcher.haystack()
+    }
 
     fn next(&mut self) -> SearchStep {
         if let Some((start, end)) = self.next_match.take() {

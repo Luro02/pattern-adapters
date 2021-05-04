@@ -6,7 +6,9 @@ pub struct NotPattern<A>(A);
 impl<A> NotPattern<A> {
     /// Constructs a new `NotPattern` with the provided [`Pattern`].
     #[must_use]
-    pub const fn new(a: A) -> Self { Self(a) }
+    pub const fn new(a: A) -> Self {
+        Self(a)
+    }
 }
 
 impl<'a, A: Pattern<'a>> Pattern<'a> for NotPattern<A> {
@@ -21,7 +23,9 @@ impl<'a, A: Pattern<'a>> Pattern<'a> for NotPattern<A> {
 pub struct NotSearcher<S>(pub(super) S);
 
 unsafe impl<'a, S: Searcher<'a>> Searcher<'a> for NotSearcher<S> {
-    fn haystack(&self) -> &'a str { self.0.haystack() }
+    fn haystack(&self) -> &'a str {
+        self.0.haystack()
+    }
 
     fn next(&mut self) -> SearchStep {
         match self.0.next() {
@@ -41,9 +45,13 @@ unsafe impl<'a, S: ReverseSearcher<'a>> ReverseSearcher<'a> for NotSearcher<S> {
         }
     }
 
-    fn next_match_back(&mut self) -> Option<(usize, usize)> { self.0.next_reject_back() }
+    fn next_match_back(&mut self) -> Option<(usize, usize)> {
+        self.0.next_reject_back()
+    }
 
-    fn next_reject_back(&mut self) -> Option<(usize, usize)> { self.0.next_match_back() }
+    fn next_reject_back(&mut self) -> Option<(usize, usize)> {
+        self.0.next_match_back()
+    }
 }
 
 impl<'a, S: DoubleEndedSearcher<'a>> DoubleEndedSearcher<'a> for NotSearcher<S> {}

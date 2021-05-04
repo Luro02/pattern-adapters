@@ -7,7 +7,9 @@ pub struct OrPattern<A, B>(A, B);
 
 impl<A, B> OrPattern<A, B> {
     #[must_use]
-    pub const fn new(a: A, b: B) -> Self { Self(a, b) }
+    pub const fn new(a: A, b: B) -> Self {
+        Self(a, b)
+    }
 }
 
 impl<'a, A: Pattern<'a>, B: Pattern<'a>> Pattern<'a> for OrPattern<A, B> {
@@ -40,7 +42,9 @@ pub struct OrSearcher<A, B> {
 }
 
 impl<'a, A: Searcher<'a>, B: Searcher<'a>> OrSearcher<A, B> {
-    pub fn index(&self) -> usize { self.index }
+    pub fn index(&self) -> usize {
+        self.index
+    }
 
     fn match_step(&mut self, range: Range) -> SearchStep {
         let index = self.index;
