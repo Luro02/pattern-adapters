@@ -75,3 +75,22 @@ unsafe impl<'a, S: Searcher<'a>> Searcher<'a> for FusedSearcher<S> {
         step
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn test_simple() {
+        let haystack = "a";
+        let mut searcher = FusedPattern::new('a').into_searcher(haystack);
+
+        assert_eq!(searcher.next(), SearchStep::Match(0, 1));
+        assert_eq!(searcher.next(), SearchStep::Done);
+        // after finishing the searcher should not yield anything
+        for _ in 0..20 {
+            assert_eq!(searcher.next(), SearchStep::Done);
+        }
+    }
+}
