@@ -1,5 +1,5 @@
 use core::ops::Deref;
-use core::str::pattern::{Pattern, SearchStep, Searcher};
+use core::str::pattern::{Pattern, SearchStep, Searcher, ReverseSearcher, DoubleEndedSearcher};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PeekablePattern<P>(P);
@@ -23,6 +23,7 @@ impl<'a, P: Pattern<'a>> Pattern<'a> for PeekablePattern<P> {
 pub struct PeekableSearcher<S> {
     searcher: S,
     peeked: Option<SearchStep>,
+    peeked_back: Option<SearchStep>,
 }
 
 impl<S> PeekableSearcher<S> {
@@ -31,6 +32,7 @@ impl<S> PeekableSearcher<S> {
         Self {
             searcher,
             peeked: None,
+            peeked_back: None,
         }
     }
 }
@@ -41,6 +43,15 @@ impl<'a, S: Searcher<'a>> PeekableSearcher<S> {
         let searcher = &mut self.searcher;
 
         *self.peeked.get_or_insert_with(|| searcher.next())
+    }
+}
+
+impl<'a, S: ReverseSearcher<'a>> PeekableSearcher<S> {
+    #[must_use]
+    pub fn peek_back(&mut self) -> SearchStep {
+        let searcher = &mut self.searcher;
+
+        *self.peeked_back.get_or_insert_with(|| searcher.next_back())
     }
 }
 
@@ -56,6 +67,17 @@ unsafe impl<'a, S: Searcher<'a>> Searcher<'a> for PeekableSearcher<S> {
         }
     }
 }
+
+unsafe impl<'a, S: ReverseSearcher<'a>> ReverseSearcher<'a> for PeekableSearcher<S> {
+    fn next_back(&mut self) -> SearchStep {
+        match self.peeked_back.take() {
+            Some(value) => value,
+            None => self.searcher.next_back(),
+        }
+    }
+}
+
+impl<'a, S: DoubleEndedSearcher<'a>> DoubleEndedSearcher<'a> for PeekableSearcher<S> {}
 
 impl<'a, S: Searcher<'a>> Deref for PeekableSearcher<S> {
     type Target = S;

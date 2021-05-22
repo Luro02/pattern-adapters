@@ -25,6 +25,28 @@ where
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ROrPattern<A, B>(OrPattern<A, B, fn(Range, Range) -> ToMatch>);
+
+impl<A, B> ROrPattern<A, B> {
+    #[must_use]
+    pub(super) fn new(a: A, b: B) -> Self {
+        Self(OrPattern::new(a, b, |_, _| ToMatch::Right))
+    }
+}
+
+impl<'a, A, B> Pattern<'a> for ROrPattern<A, B>
+where
+    A: Pattern<'a>,
+    B: Pattern<'a>,
+{
+    type Searcher = <OrPattern<A, B, fn(Range, Range) -> ToMatch> as Pattern<'a>>::Searcher;
+
+    fn into_searcher(self, haystack: &'a str) -> Self::Searcher {
+        self.0.into_searcher(haystack)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct OrPattern<A, B, F>(A, B, F);
 
 impl<A, B, F> OrPattern<A, B, F> {
@@ -76,35 +98,46 @@ pub struct OrSearcher<A, B, F> {
     f: F,
 }
 
+type SearchMatch = Option<(usize, usize)>;
+
 impl<'a, A, B, F> OrSearcher<A, B, F>
 where
     A: Searcher<'a>,
     B: Searcher<'a>,
     F: Fn(Range, Range) -> ToMatch,
 {
+    #[must_use]
     pub fn index(&self) -> usize {
         self.index
     }
 
-    fn match_step(&mut self, range: Range) -> SearchStep {
-        let index = self.index;
-
-        if index < range.start() {
-            self.next_match = Some(range.into());
-            self.index = range.start();
-            return SearchStep::Reject(index, range.start());
+    #[must_use]
+    fn any_step(&mut self, step: SearchStep) -> SearchStep {
+        if let SearchStep::Match(_, end) | SearchStep::Reject(_, end) = step {
+            self.index = end;
         }
 
-        self.index = range.end();
-
-        // TODO: what if this is not the case?
-        assert_eq!(index, range.start());
-
-        SearchStep::Match(range.start(), range.end())
+        step
     }
 
-    #[allow(clippy::type_complexity)]
-    fn next_matches(&mut self) -> (Option<(usize, usize)>, Option<(usize, usize)>) {
+    #[must_use]
+    fn match_step(&mut self, start: usize, end: usize) -> SearchStep {
+        if self.index() < start {
+            self.next_match = Some((start, end));
+            return self.reject_to(start);
+        }
+
+        debug_assert_eq!(self.index(), start);
+
+        self.any_step(SearchStep::Match(start, end))
+    }
+
+    #[must_use]
+    fn reject_to(&mut self, end: usize) -> SearchStep {
+        self.any_step(SearchStep::Reject(self.index(), end))
+    }
+
+    fn next_matches(&mut self) -> (SearchMatch, SearchMatch) {
         match self.cached_match.take() {
             Some(CachedMatch::A(start, end)) => (Some((start, end)), self.b.next_match()),
             Some(CachedMatch::B(start, end)) => (self.a.next_match(), Some((start, end))),
@@ -129,46 +162,40 @@ where
         // One might have to reject a range first, before one can match.
         // This if will be called if the last step was reject
         if let Some((start, end)) = self.next_match.take() {
-            self.index = end;
-            return SearchStep::Match(start, end);
+            return self.any_step(SearchStep::Match(start, end));
+        }
+
+        if self.index() >= self.haystack().len() {
+            return SearchStep::Done;
         }
 
         match self.next_matches() {
             (Some(a), Some(b)) => {
-                let match_range = {
+                let (start, end) = {
                     let (a, b) = (Range::from(a), Range::from(b));
 
                     // NOTE: a == b is implied by a.intersect(b).is_some()
-                    if a.intersect(b).is_some() || a == b {
+                    if a.intersect(b).is_some() || b.intersect(a).is_some() || a == b {
                         match (self.f)(a, b) {
-                            ToMatch::Left => a,
-                            ToMatch::Right => b,
+                            ToMatch::Left => a.into(),
+                            ToMatch::Right => b.into(),
                         }
                     } else if a.start() < b.start() {
                         self.cached_match = Some(CachedMatch::B(b.start(), b.end()));
-                        a
+                        a.into()
                     } else if a.start() > b.start() {
                         // the ranges are disjoint, so one match has to be cached!
                         self.cached_match = Some(CachedMatch::A(a.start(), a.end()));
-                        b
+                        b.into()
                     } else {
                         unreachable!()
                     }
                 };
 
-                self.match_step(match_range)
+                self.match_step(start, end)
             }
-            (Some(range), None) | (None, Some(range)) => self.match_step(range.into()),
-            (None, None) => {
-                let haystack_length = self.haystack().len();
-                if self.index == haystack_length {
-                    SearchStep::Done
-                } else {
-                    let start = self.index;
-                    self.index = haystack_length;
-                    SearchStep::Reject(start, self.index)
-                }
-            }
+            (Some((start, end)), None) | (None, Some((start, end))) => self.match_step(start, end),
+            (None, None) => self.reject_to(self.haystack().len()),
         }
     }
 }
@@ -177,6 +204,25 @@ where
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+
+    fn assert_integrity<'a, P: Pattern<'a>>(haystack: &'a str, pattern: P) {
+        let mut searcher = pattern.into_searcher(haystack);
+
+        let mut last_end = 0;
+        while let SearchStep::Match(start, end) | SearchStep::Reject(start, end) = searcher.next() {
+            // ensure that there are no spaces between the steps
+            assert_eq!(last_end, start);
+            last_end = end;
+
+            // the indices must lie on valid char boundaries:
+            assert!(haystack.is_char_boundary(start));
+            assert!(haystack.is_char_boundary(end));
+        }
+
+        for _ in 0..3 {
+            assert_eq!(searcher.next(), SearchStep::Done);
+        }
+    }
 
     #[test]
     fn test_searcher_same_size() {
@@ -262,5 +308,12 @@ mod tests {
         assert_eq!(searcher.next(), SearchStep::Done);
         assert_eq!(searcher.next(), SearchStep::Done);
         assert_eq!(searcher.next(), SearchStep::Done);
+    }
+
+    #[test]
+    fn test_fuzzer_failure_01() {
+        let haystack = "KJJKKK\u{0}J\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}";
+        assert_integrity(haystack, LOrPattern::new("", ""));
+        assert_integrity(haystack, ROrPattern::new("", ""));
     }
 }

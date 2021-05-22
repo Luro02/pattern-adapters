@@ -103,14 +103,16 @@ impl Range {
         // self   :     3 4
         // other  : 1 2
 
-        // if self.end <= other.start || other.end <= self.start || other.is_empty() ||
-        // self.is_empty() {
+        if self == other {
+            return Some(self);
+        }
+
         if other.start() >= self.end()
             || self.start() >= other.end()
             || other.is_empty()
             || self.is_empty()
         {
-            return None; // empty range?
+            return None;
         }
 
         let start = cmp::max(self.start(), other.start());
@@ -229,5 +231,15 @@ mod tests {
         // other  : 1 2
         assert_eq!(Range::from(1..3).intersect((3..5).into()), None);
         assert_eq!(Range::from(0..1).intersect((1..5).into()), None);
+    }
+
+    #[test]
+    fn test_fuzzer_failure_01() {
+        let range_left = Range::from(0..657956);
+        let range_right = Range::from(0..0);
+        
+        assert_eq!(range_left.intersect(range_right), range_right.intersect(range_left));
+        assert_eq!(range_left.intersect(range_left), Some(range_left));
+        assert_eq!(range_right.intersect(range_right), Some(range_right));
     }
 }

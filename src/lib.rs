@@ -11,4 +11,4 @@
 pub mod adapters;
 pub mod logic;
 
-mod utils;
+pub mod utils;

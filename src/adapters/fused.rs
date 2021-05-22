@@ -1,5 +1,5 @@
 use core::ops::Deref;
-use core::str::pattern::{Pattern, SearchStep, Searcher};
+use core::str::pattern::{Pattern, SearchStep, Searcher, ReverseSearcher, DoubleEndedSearcher};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FusedPattern<P>(P);
@@ -23,6 +23,7 @@ impl<'a, P: Pattern<'a>> Pattern<'a> for FusedPattern<P> {
 pub struct FusedSearcher<S> {
     searcher: S,
     exhausted: bool,
+    rexhausted: bool,
 }
 
 impl<S> FusedSearcher<S> {
@@ -31,6 +32,7 @@ impl<S> FusedSearcher<S> {
         Self {
             searcher,
             exhausted: false,
+            rexhausted: false,
         }
     }
 }
@@ -75,6 +77,24 @@ unsafe impl<'a, S: Searcher<'a>> Searcher<'a> for FusedSearcher<S> {
         step
     }
 }
+
+unsafe impl<'a, S: ReverseSearcher<'a>> ReverseSearcher<'a> for FusedSearcher<S> {
+    fn next_back(&mut self) -> SearchStep {
+        if self.rexhausted {
+            return SearchStep::Done;
+        }
+
+        let step = self.searcher.next_back();
+
+        if step == SearchStep::Done {
+            self.rexhausted = true;
+        }
+
+        step
+    }
+}
+
+impl<'a, S: DoubleEndedSearcher<'a>> DoubleEndedSearcher<'a> for FusedSearcher<S> {}
 
 #[cfg(test)]
 mod tests {

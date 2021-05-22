@@ -39,3 +39,26 @@ generate_pattern!(
         inner_type => NotPattern<LOrPattern<A, B>>
     }
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use pretty_assertions::assert_eq;
+
+    use core::str::pattern::{Pattern, SearchStep, Searcher};
+
+    #[test]
+    fn test_fuzzer_failure_01() {
+        let haystack = "\nP\u{0}\u{0}\u{0}\u{0}\u{0}\u{0}@\u{0}\u{0}\u{0}\u{0}";
+        let needle = "\u{0}\u{0}\u{0}";
+
+        // TODO: and pattern behaves like a then
+        let mut searcher = AndPattern::new(needle, needle).into_searcher(haystack);
+        assert_eq!(searcher.next(), SearchStep::Reject(0, 1));
+        assert_eq!(searcher.next(), SearchStep::Reject(1, 2));
+        assert_eq!(searcher.next(), SearchStep::Match(2, 5));
+        assert_eq!(searcher.next(), SearchStep::Match(5, 8));
+        assert_eq!(searcher.next(), SearchStep::Reject(8, 9));
+        assert_eq!(searcher.next(), SearchStep::Reject(9, 10));
+    }
+}

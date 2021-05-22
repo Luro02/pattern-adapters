@@ -42,21 +42,37 @@ impl<S> SimplifyingSearcher<S> {
 
 impl<'a, S: Searcher<'a>> SimplifyingSearcher<S> {
     #[must_use]
-    fn match_step(&mut self, range: Range) -> SearchStep {
-        let index = self.index;
+    pub fn index(&self) -> usize {
+        self.index
+    }
 
-        if index < range.start() {
-            self.next_match = Some(range.into());
-            self.index = range.start();
-            return SearchStep::Reject(index, range.start());
+    #[must_use]
+    fn any_step(&mut self, step: SearchStep) -> SearchStep {
+        if let SearchStep::Match(_, end) | SearchStep::Reject(_, end) = step {
+            self.index = end;
         }
 
-        self.index = range.end();
+        step
+    }
 
-        // TODO: what if this is not the case?
-        assert_eq!(index, range.start());
+    #[must_use]
+    fn match_step(&mut self, start: usize, end: usize) -> SearchStep {
+        if self.index() < start {
+            self.next_match = Some((start, end));
+            return self.reject_to(start);
+        }
 
-        SearchStep::Match(range.start(), range.end())
+        assert_eq!(self.index(), start);
+
+        self.any_step(SearchStep::Match(start, end))
+    }
+
+    #[must_use]
+    fn reject_to(&mut self, end: usize) -> SearchStep {
+        debug_assert!(self.index() <= end);
+        let start = self.index();
+        self.index = end;
+        SearchStep::Reject(start, end)
     }
 }
 
@@ -67,13 +83,11 @@ unsafe impl<'a, S: Searcher<'a>> Searcher<'a> for SimplifyingSearcher<S> {
 
     fn next(&mut self) -> SearchStep {
         if let Some((start, end)) = self.next_match.take() {
-            debug_assert_eq!(start, self.index);
-            self.index = end;
-            return SearchStep::Match(start, end);
+            return self.match_step(start, end);
         }
 
         if let Some((start, end)) = self.searcher.next_match() {
-            self.match_step((start, end).into())
+            self.match_step(start, end)
         } else {
             SearchStep::Done
         }
