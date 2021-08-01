@@ -1,15 +1,17 @@
 use core::str::pattern::{Pattern, SearchStep, Searcher};
 
-use crate::utils::Range;
-
-// This pattern will reject as much as possible, instead of returning multiple
-// small rejects
+/// This pattern will reject as much as possible, instead of returning multiple
+/// small rejects.
+///
+/// So it is guranteed that after [`SearchStep::Reject`] either [`SearchStep::Match`] or [`SearchStep::Done`]
+/// will be returned, but never [`SearchStep::Reject`].
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct SimplifyingPattern<P>(P);
 
 impl<P> SimplifyingPattern<P> {
+    /// Constructs a new [`SimplifyingPattern`] with the provided underlying [`Pattern`].
     #[must_use]
-    pub(super) const fn new(pattern: P) -> Self {
+    pub const fn new(pattern: P) -> Self {
         Self(pattern)
     }
 }
@@ -22,6 +24,10 @@ impl<'a, P: Pattern<'a>> Pattern<'a> for SimplifyingPattern<P> {
     }
 }
 
+/// This [`Searcher`] will reject as much as possible, instead of returning multiple small rejects.
+///
+/// So it is guranteed that after [`SearchStep::Reject`] either [`SearchStep::Match`] or [`SearchStep::Done`]
+/// will be returned, but never [`SearchStep::Reject`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SimplifyingSearcher<S> {
     searcher: S,
@@ -30,6 +36,7 @@ pub struct SimplifyingSearcher<S> {
 }
 
 impl<S> SimplifyingSearcher<S> {
+    /// Constructs a new [`SimplifyingSearcher`] with the provided underlying Searcher.
     #[must_use]
     pub(super) const fn new(searcher: S) -> Self {
         Self {
@@ -41,11 +48,13 @@ impl<S> SimplifyingSearcher<S> {
 }
 
 impl<'a, S: Searcher<'a>> SimplifyingSearcher<S> {
+    /// Returns the current position of the Searcher in the haystack.
     #[must_use]
     pub fn index(&self) -> usize {
         self.index
     }
 
+    /// This function advances the `self.index`, before returning the next `SearchStep`.
     #[must_use]
     fn any_step(&mut self, step: SearchStep) -> SearchStep {
         if let SearchStep::Match(_, end) | SearchStep::Reject(_, end) = step {
@@ -53,26 +62,6 @@ impl<'a, S: Searcher<'a>> SimplifyingSearcher<S> {
         }
 
         step
-    }
-
-    #[must_use]
-    fn match_step(&mut self, start: usize, end: usize) -> SearchStep {
-        if self.index() < start {
-            self.next_match = Some((start, end));
-            return self.reject_to(start);
-        }
-
-        assert_eq!(self.index(), start);
-
-        self.any_step(SearchStep::Match(start, end))
-    }
-
-    #[must_use]
-    fn reject_to(&mut self, end: usize) -> SearchStep {
-        debug_assert!(self.index() <= end);
-        let start = self.index();
-        self.index = end;
-        SearchStep::Reject(start, end)
     }
 }
 
@@ -83,11 +72,18 @@ unsafe impl<'a, S: Searcher<'a>> Searcher<'a> for SimplifyingSearcher<S> {
 
     fn next(&mut self) -> SearchStep {
         if let Some((start, end)) = self.next_match.take() {
-            return self.match_step(start, end);
+            return SearchStep::Match(start, end);
         }
 
         if let Some((start, end)) = self.searcher.next_match() {
-            self.match_step(start, end)
+            // before one can return the match, everything up to the start of the match must be rejected
+            if self.index() < start {
+                self.next_match = Some((start, end));
+                return self.any_step(SearchStep::Reject(self.index(), start));
+            }
+
+            debug_assert_eq!(self.index(), start);
+            self.any_step(SearchStep::Match(start, end))
         } else {
             SearchStep::Done
         }

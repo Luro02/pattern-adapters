@@ -11,6 +11,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+pretty_assertions = "0.7"
 
 [dependencies.pattern-adapters]
 path = ".."

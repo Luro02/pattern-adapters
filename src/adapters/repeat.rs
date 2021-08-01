@@ -1,8 +1,39 @@
-use core::{
-    str::pattern::{Pattern, SearchStep, Searcher},
-    usize,
-};
+use core::str::pattern::{Pattern, SearchStep, Searcher};
 
+use super::PeekableSearcher;
+
+// TODO: make it possible to specify, whether this is greedy or not
+// TODO: if it is greedy (current implementation) it will try to match as much as possible
+// TODO: if it is not it will return after the minimum number of matches have been found
+// TODO: (maybe one could split this pattern up into two patterns, one for min and another for max?)
+// TODO: max would be something like limit, but limit limits the total number of matches, while max would limit the number
+// TODO: of consecutive matches
+//
+// TODO: it would be awesome if the matches would not be merged (this could be implemented by keeping track of how many have been matched already?)
+
+/// Repeatedly matches a [`Pattern`].
+///
+/// # Examples
+///
+/// Matching a number one or two times:
+///
+/// ```
+/// #![feature(pattern)]
+/// use core::str::pattern::{SearchStep, Searcher, Pattern};
+/// use pattern_adapters::adapters::RepeatPattern;
+///
+/// // the string one wants to search through:
+/// let haystack = "123SD98";
+/// // the pattern with which one can search:
+/// let pattern = RepeatPattern::new(|c: char| c.is_ascii_digit(), 1, 2);
+/// let mut searcher = pattern.into_searcher(haystack);
+///
+/// assert_eq!(searcher.next_match(), Some((0, 2))); // matches "12"
+/// assert_eq!(searcher.next_match(), Some((2, 3))); // matches "3"
+/// assert_eq!(searcher.next_match(), Some((5, 7))); // matches "98"
+/// ```
+///
+/// [`Pattern`]: core::str::pattern::Pattern
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct RepeatPattern<P> {
     pattern: P,
@@ -12,7 +43,7 @@ pub struct RepeatPattern<P> {
 
 impl<P> RepeatPattern<P> {
     #[must_use]
-    pub(super) const fn new(pattern: P, min: usize, max: usize) -> Self {
+    pub const fn new(pattern: P, min: usize, max: usize) -> Self {
         Self { pattern, min, max }
     }
 }
@@ -27,67 +58,19 @@ impl<'a, P: Pattern<'a>> Pattern<'a> for RepeatPattern<P> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RepeatSearcher<S> {
-    searcher: S,
+    searcher: PeekableSearcher<S>,
     min: usize,
     max: usize,
-    cached: Option<(usize, usize)>,
-    next_match: Option<(usize, usize)>,
-    index: usize,
 }
 
 impl<S> RepeatSearcher<S> {
     #[must_use]
-    pub(super) const fn new(searcher: S, min: usize, max: usize) -> Self {
+    pub(super) fn new(searcher: S, min: usize, max: usize) -> Self {
         Self {
-            searcher,
+            searcher: PeekableSearcher::new(searcher),
             min,
             max,
-            cached: None,
-            next_match: None,
-            index: 0,
         }
-    }
-}
-
-impl<'a, S: Searcher<'a>> RepeatSearcher<S> {
-    #[must_use]
-    pub fn index(&self) -> usize {
-        self.index
-    }
-
-    #[must_use]
-    fn next_internal_match(&mut self) -> Option<(usize, usize)> {
-        self.cached.take().or_else(|| self.searcher.next_match())
-    }
-
-    fn cache_match(&mut self, start: usize, end: usize) {
-        self.cached = Some((start, end));
-    }
-
-    #[must_use]
-    fn any_step(&mut self, step: SearchStep) -> SearchStep {
-        if let SearchStep::Match(_, end) | SearchStep::Reject(_, end) = step {
-            self.index = end;
-        }
-
-        step
-    }
-
-    #[must_use]
-    fn match_step(&mut self, start: usize, end: usize) -> SearchStep {
-        if self.index() < start {
-            self.next_match = Some((start, end));
-            return self.reject_to(start);
-        }
-
-        debug_assert_eq!(self.index(), start);
-
-        self.any_step(SearchStep::Match(start, end))
-    }
-
-    #[must_use]
-    fn reject_to(&mut self, end: usize) -> SearchStep {
-        self.any_step(SearchStep::Reject(self.index(), end))
     }
 }
 
@@ -97,33 +80,29 @@ unsafe impl<'a, S: Searcher<'a>> Searcher<'a> for RepeatSearcher<S> {
     }
 
     fn next(&mut self) -> SearchStep {
-        if let Some((start, end)) = self.next_match.take() {
-            return self.any_step(SearchStep::Match(start, end));
-        }
+        let step = self.searcher.next();
 
-        if self.index() >= self.haystack().len() {
-            return SearchStep::Done;
-        }
-
-        if let Some((start, end)) = self.next_internal_match() {
+        if let SearchStep::Match(start, end) = step {
             let mut end = end;
             let mut matches = 1;
 
             for _ in 1..self.max {
-                if let Some((next_start, next_end)) = self.next_internal_match() {
+                if let SearchStep::Match(next_start, next_end) = self.searcher.peek() {
                     // check that the next match starts at the end of the previous match:
                     if next_start == end {
+                        // advance the searcher:
+                        self.searcher.next();
                         matches += 1;
                         end = next_end;
                     } else {
                         // discontinuity between the matches
-                        self.cache_match(next_start, next_end);
 
+                        // check that enough has been matched to return something:
                         if matches <= self.max && matches >= self.min {
-                            return self.match_step(start, end);
-                        } else {
-                            return self.reject_to(next_start);
+                            return SearchStep::Match(start, end);
                         }
+
+                        return SearchStep::Reject(start, next_start);
                     }
                 } else {
                     break;
@@ -131,13 +110,13 @@ unsafe impl<'a, S: Searcher<'a>> Searcher<'a> for RepeatSearcher<S> {
             }
 
             if matches < self.min {
-                return self.reject_to(end);
+                return SearchStep::Reject(start, end);
             }
 
-            return self.match_step(start, end);
+            SearchStep::Match(start, end)
+        } else {
+            step
         }
-
-        SearchStep::Done
     }
 }
 
@@ -203,9 +182,18 @@ mod tests {
             RepeatPattern::new(|c: char| c.is_ascii_digit(), 1, 3).into_searcher(haystack);
 
         assert_eq!(searcher.next(), SearchStep::Match(0, 1));
-        assert_eq!(searcher.next(), SearchStep::Reject(1, 7));
-        assert_eq!(searcher.next(), SearchStep::Match(7, 9));
-        assert_eq!(searcher.next(), SearchStep::Reject(9, 16));
+        assert_eq!(searcher.next(), SearchStep::Reject(1, 2));
+        assert_eq!(searcher.next(), SearchStep::Reject(2, 4));
+        assert_eq!(searcher.next(), SearchStep::Reject(4, 6));
+        assert_eq!(searcher.next(), SearchStep::Reject(6, 7));
+        assert_eq!(searcher.next(), SearchStep::Match(7, 9)); // TODO: this may be split up?
+        assert_eq!(searcher.next(), SearchStep::Reject(9, 10));
+        assert_eq!(searcher.next(), SearchStep::Reject(10, 11));
+        assert_eq!(searcher.next(), SearchStep::Reject(11, 12));
+        assert_eq!(searcher.next(), SearchStep::Reject(12, 13));
+        assert_eq!(searcher.next(), SearchStep::Reject(13, 14));
+        assert_eq!(searcher.next(), SearchStep::Reject(14, 15));
+        assert_eq!(searcher.next(), SearchStep::Reject(15, 16));
         assert_eq!(searcher.next(), SearchStep::Match(16, 17));
         assert_eq!(searcher.next(), SearchStep::Done);
     }

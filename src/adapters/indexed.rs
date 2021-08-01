@@ -1,6 +1,6 @@
 use core::str::pattern::{Pattern, SearchStep, Searcher};
 
-/// An indexed pattern, that will keep track of the last matched index.
+/// An indexed [`Pattern`], that will keep track of where the last [`SearchStep`] ended.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IndexedPattern<P>(P);
 
@@ -19,6 +19,7 @@ impl<'a, P: Pattern<'a>> Pattern<'a> for IndexedPattern<P> {
     }
 }
 
+/// An indexed [`Searcher`], that will keep track of where the last [`SearchStep`] ended.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IndexedSearcher<S> {
     searcher: S,

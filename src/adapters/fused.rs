@@ -1,6 +1,12 @@
 use core::ops::Deref;
-use core::str::pattern::{Pattern, SearchStep, Searcher, ReverseSearcher, DoubleEndedSearcher};
+use core::str::pattern::{DoubleEndedSearcher, Pattern, ReverseSearcher, SearchStep, Searcher};
 
+/// Gurantees that after a [`SearchStep::Done`] always [`SearchStep::Done`] is returned.
+///
+/// # Note
+///
+/// Depending on how one interprets the documentation of [`Searcher`] this should already
+/// be guaranteed by all implementations of the [`Searcher`] trait.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FusedPattern<P>(P);
 
@@ -19,6 +25,12 @@ impl<'a, P: Pattern<'a>> Pattern<'a> for FusedPattern<P> {
     }
 }
 
+/// Gurantees that after a [`SearchStep::Done`] always [`SearchStep::Done`] is returned.
+///
+/// # Note
+///
+/// Depending on how one interprets the documentation of [`Searcher`] this should already
+/// be guaranteed by all implementations of the [`Searcher`] trait.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct FusedSearcher<S> {
     searcher: S,

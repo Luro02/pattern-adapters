@@ -9,8 +9,8 @@ use pattern_adapters::adapters::PatternExt;
 fuzz_target!(|data: (&str, &str, char, usize)| {
     let (haystack, needle_a, needle_b, limit) = data;
 
-    utils::assert_integrity(haystack, needle_a.fused());
-    utils::assert_integrity(haystack, needle_b.fused());
+    utils::assert_integrity(haystack, needle_a.fuse());
+    utils::assert_integrity(haystack, needle_b.fuse());
 
     utils::assert_integrity(haystack, needle_a.indexed());
     utils::assert_integrity(haystack, needle_b.indexed());

@@ -1,4 +1,4 @@
-use core::str::pattern::{Pattern, SearchStep, Searcher};
+use core::str::pattern::{DoubleEndedSearcher, Pattern, ReverseSearcher, SearchStep, Searcher};
 use core::str::CharIndices;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
@@ -29,7 +29,6 @@ where
 pub struct CharSearcher<'a, F, T> {
     f: F,
     state: T,
-    haystack: &'a str,
     chars: CharIndices<'a>,
 }
 
@@ -40,7 +39,6 @@ where
     #[must_use]
     pub(super) fn new(haystack: &'a str, f: F, state: T) -> Self {
         Self {
-            haystack,
             f,
             state,
             chars: haystack.char_indices(),
@@ -53,8 +51,7 @@ where
     F: FnMut(char, &mut T) -> bool,
 {
     fn haystack(&self) -> &'a str {
-        // TODO: one could also return self.chars.as_str()
-        self.haystack
+        self.chars.as_str()
     }
 
     fn next(&mut self) -> SearchStep {
@@ -70,6 +67,30 @@ where
             SearchStep::Done
         }
     }
+}
+
+unsafe impl<'a, F, T> ReverseSearcher<'a> for CharSearcher<'a, F, T>
+where
+    F: FnMut(char, &mut T) -> bool,
+{
+    fn next_back(&mut self) -> SearchStep {
+        if let Some((start, c)) = self.chars.next_back() {
+            let end = start + c.len_utf8();
+
+            if (self.f)(c, &mut self.state) {
+                SearchStep::Match(start, end)
+            } else {
+                SearchStep::Reject(start, end)
+            }
+        } else {
+            SearchStep::Done
+        }
+    }
+}
+
+impl<'a, F, T> DoubleEndedSearcher<'a> for CharSearcher<'a, F, T> where
+    F: FnMut(char, &mut T) -> bool
+{
 }
 
 #[cfg(test)]

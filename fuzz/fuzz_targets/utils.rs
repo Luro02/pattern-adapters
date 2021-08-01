@@ -1,4 +1,4 @@
-use core::str::pattern::{Pattern, Searcher, SearchStep};
+use core::str::pattern::{Pattern, SearchStep, Searcher};
 
 #[macro_export]
 macro_rules! assert_searcher_eq {
@@ -9,7 +9,7 @@ macro_rules! assert_searcher_eq {
             $(
                 assert_eq!(first_step, $next.next());
             )+
-    
+
             if first_step == ::core::str::pattern::SearchStep::Done {
                 break;
             }
@@ -54,4 +54,20 @@ pub fn assert_integrity<'a, P: Pattern<'a>>(haystack: &'a str, pattern: P) {
     for _ in 0..3 {
         assert_eq!(searcher.next(), SearchStep::Done);
     }
+}
+
+#[must_use]
+pub fn count_searcher<'a>(mut searcher: impl Searcher<'a>) -> (usize, usize) {
+    let mut number_of_matches = 0;
+    let mut number_of_rejects = 0;
+
+    loop {
+        match searcher.next() {
+            SearchStep::Match(_, _) => number_of_matches += 1,
+            SearchStep::Reject(_, _) => number_of_rejects += 1,
+            SearchStep::Done => break,
+        }
+    }
+
+    (number_of_matches, number_of_rejects)
 }

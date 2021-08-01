@@ -1,7 +1,6 @@
 mod fused;
 mod greedy_reject;
 mod indexed;
-mod internal;
 mod limit;
 mod peekable;
 mod repeat;
@@ -26,7 +25,7 @@ use core::str::pattern::Searcher;
 
 pub trait PatternExt<'a>: Pattern<'a> {
     #[must_use]
-    fn fused(self) -> FusedPattern<Self> {
+    fn fuse(self) -> FusedPattern<Self> {
         FusedPattern::new(self)
     }
 
@@ -84,7 +83,7 @@ where
     /// use pattern_adapters::adapters::SearcherExt;
     ///
     /// let haystack = "h";
-    /// let mut searcher = 'a'.into_searcher(haystack).fused();
+    /// let mut searcher = 'a'.into_searcher(haystack).fuse();
     ///
     /// assert_eq!(searcher.next(), SearchStep::Reject(0, 1));
     /// assert_eq!(searcher.next(), SearchStep::Done);
@@ -93,7 +92,7 @@ where
     /// assert_eq!(searcher.next(), SearchStep::Done);
     /// ```
     #[must_use]
-    fn fused(self) -> FusedSearcher<Self> {
+    fn fuse(self) -> FusedSearcher<Self> {
         FusedSearcher::new(self)
     }
 
@@ -119,8 +118,8 @@ where
     /// assert_eq!(searcher.next(), SearchStep::Done);
     /// ```
     #[must_use]
-    fn limit(self, max: usize) -> LimitPattern<Self> {
-        LimitPattern::new(self, max)
+    fn limit(self, max: usize) -> LimitSearcher<Self> {
+        LimitSearcher::new(self, max)
     }
 
     #[must_use]

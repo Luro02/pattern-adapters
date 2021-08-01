@@ -1,5 +1,6 @@
 use core::str::pattern::{DoubleEndedSearcher, Pattern, ReverseSearcher, SearchStep, Searcher};
 
+/// Negates the Matches and Rejects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct NotPattern<A>(A);
 

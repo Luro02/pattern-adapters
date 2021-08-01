@@ -1,6 +1,25 @@
 use core::str::pattern::{Pattern, SearchStep, Searcher};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+/// Matches only if the first [`Pattern`] matches and then the second [`Pattern`] matches.
+///
+/// # Example
+///
+/// Matches only if `"ab"` is followed by a number:
+///
+/// ```
+/// #![feature(pattern)]
+/// use core::str::pattern::{SearchStep, Searcher, Pattern};
+/// use pattern_adapters::adapters::PatternExt;
+///
+/// // the string one wants to search through:
+/// let haystack = "ab1abcab9d";
+/// let mut searcher = "ab".then(|c: char| c.is_ascii_digit()).into_searcher(haystack);
+///
+/// assert_eq!(searcher.next_match(), Some((0, 3))); // matches "ab1"
+/// assert_eq!(searcher.next_match(), Some((6, 9))); // matches "ab9"
+/// assert_eq!(searcher.next_match(), None);
+/// ```
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ThenPattern<P, T>(P, T);
 
 impl<P, T> ThenPattern<P, T> {
@@ -86,7 +105,6 @@ impl<'a, S: Searcher<'a>, T: Searcher<'a>> ThenSearcher<S, T> {
         None
     }
 
-    // TODO: evaluate the worth of this method
     #[must_use]
     fn any_step(&mut self, step: SearchStep) -> SearchStep {
         if let SearchStep::Match(_, end) | SearchStep::Reject(_, end) = step {
@@ -94,18 +112,6 @@ impl<'a, S: Searcher<'a>, T: Searcher<'a>> ThenSearcher<S, T> {
         }
 
         step
-    }
-
-    #[must_use]
-    fn match_step(&mut self, start: usize, end: usize) -> SearchStep {
-        if self.index() < start {
-            self.next_match = Some((start, end));
-            return self.any_step(SearchStep::Reject(self.index(), start));
-        }
-
-        debug_assert_eq!(self.index(), start);
-
-        self.any_step(SearchStep::Match(start, end))
     }
 
     #[must_use]
@@ -134,11 +140,16 @@ unsafe impl<'a, S: Searcher<'a>, T: Searcher<'a>> Searcher<'a> for ThenSearcher<
         }
 
         if let Some((start, end)) = self.next_internal_match() {
-            //dbg!((start, end), self.index());
             if let Some((tstart, tend)) = self.next_then_match(end) {
-                //dbg!((tstart, tend));
                 if end == tstart {
-                    self.match_step(start, tend)
+                    if self.index() < start {
+                        self.next_match = Some((start, tend));
+                        return self.any_step(SearchStep::Reject(self.index(), start));
+                    }
+
+                    debug_assert_eq!(self.index(), start);
+
+                    self.any_step(SearchStep::Match(start, tend))
                 } else {
                     self.any_step(SearchStep::Reject(self.index(), end))
                 }
@@ -146,12 +157,9 @@ unsafe impl<'a, S: Searcher<'a>, T: Searcher<'a>> Searcher<'a> for ThenSearcher<
                 self.reject_remaining()
             }
         } else if self.index() < self.haystack().len() {
-            //dbg!("._.");
             self.reject_remaining()
         } else {
-            // unreachable?
             unreachable!("SearchStep::Done")
-            // SearchStep::Done
         }
     }
 }
